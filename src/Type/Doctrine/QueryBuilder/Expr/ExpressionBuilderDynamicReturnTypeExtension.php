@@ -11,6 +11,7 @@ use PHPStan\Type\Doctrine\ArgumentsProcessor;
 use PHPStan\Type\Doctrine\ObjectMetadataResolver;
 use PHPStan\Type\DynamicMethodReturnTypeExtension;
 use PHPStan\Type\Type;
+use ArgumentCountError;
 use function get_class;
 use function is_object;
 use function method_exists;
@@ -43,6 +44,10 @@ class ExpressionBuilderDynamicReturnTypeExtension implements DynamicMethodReturn
 
 	public function getTypeFromMethodCall(MethodReflection $methodReflection, MethodCall $methodCall, Scope $scope): ?Type
 	{
+		if ($methodCall->isFirstClassCallable()) {
+			return null;
+		}
+
 		$objectManager = $this->objectMetadataResolver->getObjectManager();
 		if ($objectManager === null) {
 			return null;
@@ -74,7 +79,12 @@ class ExpressionBuilderDynamicReturnTypeExtension implements DynamicMethodReturn
 			return null;
 		}
 
-		$exprValue = $expr->{$methodReflection->getName()}(...$args);
+		try {
+			$exprValue = $expr->{$methodReflection->getName()}(...$args);
+		} catch (ArgumentCountError) {
+			return null;
+		}
+
 		if (is_object($exprValue)) {
 			return new ExprType(get_class($exprValue), $exprValue);
 		}

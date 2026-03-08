@@ -9,6 +9,7 @@ use PHPStan\Rules\Doctrine\ORM\DynamicQueryBuilderArgumentException;
 use PHPStan\Type\Doctrine\ArgumentsProcessor;
 use PHPStan\Type\DynamicMethodReturnTypeExtension;
 use PHPStan\Type\Type;
+use ArgumentCountError;
 use function get_class;
 use function in_array;
 use function is_object;
@@ -38,6 +39,10 @@ class BaseExpressionDynamicReturnTypeExtension implements DynamicMethodReturnTyp
 
 	public function getTypeFromMethodCall(MethodReflection $methodReflection, MethodCall $methodCall, Scope $scope): ?Type
 	{
+		if ($methodCall->isFirstClassCallable()) {
+			return null;
+		}
+
 		try {
 			$args = $this->argumentsProcessor->processArgs($scope, $methodReflection->getName(), $methodCall->getArgs());
 		} catch (DynamicQueryBuilderArgumentException $e) {
@@ -55,7 +60,12 @@ class BaseExpressionDynamicReturnTypeExtension implements DynamicMethodReturnTyp
 			return null;
 		}
 
-		$exprValue = $expr->{$methodReflection->getName()}(...$args);
+		try {
+			$exprValue = $expr->{$methodReflection->getName()}(...$args);
+		} catch (ArgumentCountError) {
+			return null;
+		}
+
 		if (is_object($exprValue)) {
 			return new ExprType(get_class($exprValue), $exprValue);
 		}
